@@ -137,6 +137,10 @@ footer{margin-top:28px;color:var(--ink-2);font-size:12px;border-top:1px solid va
 .gz-cancel{position:absolute;right:max(16px,env(safe-area-inset-right,0px));top:max(16px,env(safe-area-inset-top,0px))}
 .gz-dwell{outline:4px solid var(--amber);outline-offset:2px}
 body.gz-on .hero{display:none}
+body.gz-on #v-cards .grid2{grid-template-columns:minmax(0,1.7fr) minmax(0,.9fr)}
+body.gz-on .cardgrid{grid-template-columns:repeat(3,1fr);gap:16px}
+body.gz-on .pic{min-height:min(170px,21vh);font-size:20px}
+body.gz-on .pic span.e{font-size:56px}
 #webgazerVideoContainer{top:auto!important;left:auto!important;right:12px!important;bottom:12px!important;transform:scale(.5);transform-origin:bottom right;z-index:40!important;border-radius:8px;overflow:hidden}
 .gz-log{font-family:var(--mono);font-size:12px;color:var(--ink-2);margin:0;padding-left:18px}
 </style>
@@ -540,14 +544,28 @@ const _applyI18n=applyI18n;applyI18n=function(){_applyI18n();gzUI()};
 function onGaze(d){
   if(!d)return;
   if(GZ.samples)GZ.samples.push({x:d.x,y:d.y});
-  GZ.sx=GZ.sx*.65+d.x*.35;GZ.sy=GZ.sy*.65+d.y*.35;
-  if(GZ.sx===0&&GZ.sy===0){GZ.sx=d.x;GZ.sy=d.y}
+  (GZ.bx=GZ.bx||[]).push(d.x);(GZ.by=GZ.by||[]).push(d.y);if(GZ.bx.length>5){GZ.bx.shift();GZ.by.shift()}
+  const med=a=>[...a].sort((p,q)=>p-q)[a.length>>1],mx=med(GZ.bx),my=med(GZ.by);
+  if(!GZ.sx&&!GZ.sy){GZ.sx=mx;GZ.sy=my}else{GZ.sx=GZ.sx*.6+mx*.4;GZ.sy=GZ.sy*.6+my*.4}
   gzDot.style.transform=`translate(${GZ.sx}px,${GZ.sy}px)`;
   if(GZ.mode)return;
-  gzDwell(document.elementFromPoint(GZ.sx,GZ.sy));
+  gzDwell(gzPick(GZ.sx,GZ.sy));
 }
-function gzDwell(raw){
-  let el=raw&&raw.closest('.pic,.chip,.btn,.iconbtn,.tok');
+const SNAP=130,SEL='.pic,.chip,.btn,.iconbtn,.tok';
+const rdist=(el,x,y)=>{const r=el.getBoundingClientRect();return Math.hypot(Math.max(r.left-x,0,x-r.right),Math.max(r.top-y,0,y-r.bottom))};
+/* webcam gaze misses by 100-200 px: snap to the nearest big target and stay on the current one until gaze clearly leaves */
+function gzPick(x,y){
+  if(GZ.tgt&&GZ.tgt.isConnected&&rdist(GZ.tgt,x,y)<SNAP*.6)return GZ.tgt;
+  const hit=document.elementFromPoint(x,y),direct=hit&&hit.closest(SEL);
+  if(direct&&!direct.closest('.gz-panel'))return direct;
+  let best=null,bd=SNAP;
+  for(const el of $$('.pic,#cgo,#cclr,.iconbtn,.tok')){
+    if(el.closest('.gz-panel')||el.disabled||!el.offsetWidth)continue;
+    const d=rdist(el,x,y);if(d<bd){bd=d;best=el}
+  }
+  return best;
+}
+function gzDwell(el){
   if(el&&el.closest('.gz-panel'))el=null;
   const key=el?(el.dataset.id||el.dataset.rm||el.dataset.cat||el.dataset.topic||el.id||el.textContent):'';
   if(key!==GZ.key){
@@ -584,7 +602,7 @@ $('#gzShow').addEventListener('change',e=>{gzDot.style.display=GZ.on&&e.target.c
 $('#gzCancel').addEventListener('click',()=>{GZ.cancel=true});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')GZ.cancel=true});
 
-const PTS=[[.08,.12],[.5,.12],[.92,.12],[.08,.5],[.5,.5],[.92,.5],[.08,.88],[.5,.88],[.92,.88]];
+const PTS=[[.08,.12],[.5,.12],[.92,.12],[.08,.5],[.5,.5],[.92,.5],[.08,.88],[.5,.88],[.92,.88],[.3,.3],[.7,.3],[.3,.7],[.7,.7]];
 function gzPlace(px,py){const T=$('#gzT');T.style.left=px*innerWidth+'px';T.style.top=py*innerHeight+'px'}
 async function gzOpen(msgKey){GZ.mode='run';GZ.cancel=false;gzOv.dataset.on='1';$('#gzM').textContent=t(msgKey);gzDot.style.zIndex=70}
 function gzClose(){gzOv.dataset.on='0';GZ.mode=null;GZ.samples=null;GZ.key='';GZ.lock=''}
